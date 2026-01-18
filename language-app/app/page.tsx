@@ -164,6 +164,8 @@ export default function Home() {
       const initial = createInitialMessage();
       setMessages([initial]);
       saveMessages([initial]);
+      autoPlayTargetIdRef.current = initial.id;
+      autoPlayedRef.current.delete(initial.id);
       setProgress(storedProgress);
       return;
     }
@@ -373,12 +375,12 @@ export default function Home() {
             <div className="space-y-2 flex items-center">
               <Image src="/logo.png" alt="Language App Logo" width={128} height={128} />
               <div className="flex-col pl-4">
-                <CardTitle className="text-5xl font-bold">TomoSpeak</CardTitle>
+                <CardTitle className="text-5xl font-bold">TomoTalk</CardTitle>
                 <CardDescription className="text-m text-muted-foreground">
                   とも (Tomo) = friend 
                 </CardDescription>
                 <CardDescription className="text-lg text-">
-                  TomoSpeak: Your friendly AI Learning Companion
+                  TomoTalk: Your friendly AI Learning Companion
                 </CardDescription>
               </div>
             </div>
@@ -393,7 +395,7 @@ export default function Home() {
           </div>
           <Separator />
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-            <span>Powered by Gemini 2.5 Flash-Lite & ElevenLab </span>
+            <span>Powered by Gemini 2.5 Flash-Lite & ElevenLabs Turbo V2.5 </span>
             {inFlight ? (
               <span className="text-primary">AI is typing...</span>
             ) : lastAssistant ? (
