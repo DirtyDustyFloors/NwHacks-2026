@@ -177,7 +177,7 @@ export default function Home() {
 
   return (
     <div className="flex h-screen w-full flex-col bg-transparent px-10 py-10">
-      <Card className="mx-auto flex w-full max-w-5xl flex-1 flex-col border-border/80 bg-card/80 shadow-2xl">
+      <Card className="ml-auto margin-right-auto flex w-full max-w-5xl flex-1 flex-col border-border/80 bg-card/80 shadow-2xl">
         <CardHeader className="space-y-4 pb-4">
           <div className="flex items-start justify-between gap-6">
             <div className="space-y-2">
