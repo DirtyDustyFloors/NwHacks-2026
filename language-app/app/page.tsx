@@ -176,7 +176,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-transparent px-10 py-10">
+    <div className="flex h-screen w-full flex-col bg-transparent px-10 py-10">
       <Card className="mx-auto flex w-full max-w-5xl flex-1 flex-col border-border/80 bg-card/80 shadow-2xl">
         <CardHeader className="space-y-4 pb-4">
           <div className="flex items-start justify-between gap-6">
@@ -217,7 +217,7 @@ export default function Home() {
         <CardContent className="flex flex-1 flex-col gap-4" aria-live="polite">
           <div
             ref={listRef}
-            className="flex h-[58vh] flex-1 flex-col gap-4 overflow-y-auto rounded-xl border border-border/70 bg-background/40 p-5 scroll-smooth"
+            className="flex h-[58vh] flex-col min-h-0 gap-4 overflow-y-auto rounded-xl border border-border/70 bg-background/40 p-5 scroll-smooth"
           >
             {messages.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
