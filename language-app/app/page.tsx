@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +41,11 @@ const createMessage = (role: ChatMessage["role"], content: string): ChatMessage 
   timestamp: new Date().toISOString(),
 });
 
+type AudioStatus = {
+  status: "loading" | "ready" | "error";
+  url?: string;
+};
+
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -48,6 +53,12 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [retryMessage, setRetryMessage] = useState<ChatMessage | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const [audioByMessage, setAudioByMessage] = useState<Record<string, AudioStatus>>({});
+  const audioUrlsRef = useRef<Record<string, string>>({});
+  const audioElementsRef = useRef<Record<string, HTMLAudioElement | null>>({});
+  const messageIdsRef = useRef<Set<string>>(new Set());
+  const autoPlayTargetIdRef = useRef<string | null>(null);
+  const autoPlayedRef = useRef<Set<string>>(new Set());
 
   const lastAssistant = useMemo(() => {
     return [...messages].reverse().find((message) => message.role === "assistant");
@@ -56,6 +67,119 @@ export default function Home() {
   const errorMessage = error
     ? ERROR_MESSAGES[error] ?? ERROR_MESSAGES.AI_SERVICE_FAILED
     : null;
+
+  const releaseAudioUrl = useCallback((messageId: string) => {
+    const existingUrl = audioUrlsRef.current[messageId];
+    if (existingUrl) {
+      URL.revokeObjectURL(existingUrl);
+      delete audioUrlsRef.current[messageId];
+    }
+  }, []);
+
+  const releaseAllAudioUrls = useCallback(() => {
+    Object.keys(audioUrlsRef.current).forEach((messageId) => {
+      releaseAudioUrl(messageId);
+    });
+  }, [releaseAudioUrl]);
+
+  const releaseAudioElement = useCallback((messageId: string) => {
+    if (audioElementsRef.current[messageId]) {
+      delete audioElementsRef.current[messageId];
+    }
+  }, []);
+
+  const clearAudioState = useCallback(() => {
+    setAudioByMessage((prev) => {
+      if (Object.keys(prev).length === 0) {
+        return prev;
+      }
+      releaseAllAudioUrls();
+      audioElementsRef.current = {};
+      return {};
+    });
+    autoPlayedRef.current.clear();
+    autoPlayTargetIdRef.current = null;
+  }, [releaseAllAudioUrls]);
+
+  const fetchAudioForMessage = useCallback(
+    async (message: ChatMessage) => {
+      try {
+        const response = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: message.content }),
+        });
+
+        if (!response.ok) {
+          throw new Error("TTS_FAILED");
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const mimeType = response.headers.get("content-type") ?? "audio/mpeg";
+        const blob = new Blob([arrayBuffer], { type: mimeType });
+        const objectUrl = URL.createObjectURL(blob);
+
+        if (!messageIdsRef.current.has(message.id)) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+
+        releaseAudioUrl(message.id);
+        audioUrlsRef.current[message.id] = objectUrl;
+
+        setAudioByMessage((prev) => ({
+          ...prev,
+          [message.id]: {
+            status: "ready",
+            url: objectUrl,
+          },
+        }));
+      } catch {
+        releaseAudioUrl(message.id);
+        setAudioByMessage((prev) => ({
+          ...prev,
+          [message.id]: { status: "error" },
+        }));
+      }
+    },
+    [releaseAudioUrl]
+  );
+
+  const requestAudioForMessage = useCallback(
+    (message: ChatMessage) => {
+      releaseAudioUrl(message.id);
+      setAudioByMessage((prev) => ({
+        ...prev,
+        [message.id]: { status: "loading" },
+      }));
+      void fetchAudioForMessage(message);
+    },
+    [fetchAudioForMessage, releaseAudioUrl]
+  );
+
+  const handleAudioElementRef = useCallback(
+    (messageId: string, element: HTMLAudioElement | null) => {
+      if (element) {
+        audioElementsRef.current[messageId] = element;
+        const state = audioByMessage[messageId];
+        if (
+          state?.status === "ready" &&
+          autoPlayTargetIdRef.current === messageId &&
+          !autoPlayedRef.current.has(messageId)
+        ) {
+          element.currentTime = 0;
+          void element.play().catch(() => {
+            // Browser autoplay policies might block playback; safe to ignore.
+          });
+          autoPlayedRef.current.add(messageId);
+          autoPlayTargetIdRef.current = null;
+        }
+      } else {
+        delete audioElementsRef.current[messageId];
+      }
+    },
+    [audioByMessage]
+  );
 
   useEffect(() => {
     const stored = loadMessages();
@@ -74,6 +198,78 @@ export default function Home() {
     }
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages, inFlight]);
+
+  useEffect(() => {
+    const currentIds = new Set(messages.map((message) => message.id));
+    messageIdsRef.current = currentIds;
+
+    setAudioByMessage((prev) => {
+      let changed = false;
+      const nextState = { ...prev };
+      for (const id of Object.keys(nextState)) {
+        if (!currentIds.has(id)) {
+          releaseAudioUrl(id);
+          delete nextState[id];
+          changed = true;
+        }
+      }
+      return changed ? nextState : prev;
+    });
+
+    Object.keys(audioElementsRef.current).forEach((id) => {
+      if (!currentIds.has(id)) {
+        releaseAudioElement(id);
+      }
+    });
+
+    autoPlayedRef.current.forEach((playedId) => {
+      if (!currentIds.has(playedId)) {
+        autoPlayedRef.current.delete(playedId);
+      }
+    });
+  }, [messages, releaseAudioUrl, releaseAudioElement]);
+
+  useEffect(() => {
+    const assistantMessages = messages.filter(
+      (message) => message.role === "assistant" && !audioByMessage[message.id]
+    );
+
+    assistantMessages.forEach((message) => {
+      requestAudioForMessage(message);
+    });
+  }, [messages, audioByMessage, requestAudioForMessage]);
+
+  useEffect(() => {
+    Object.entries(audioByMessage).forEach(([messageId, state]) => {
+      if (state.status !== "ready" || !state.url) {
+        return;
+      }
+      if (autoPlayedRef.current.has(messageId)) {
+        return;
+      }
+      if (autoPlayTargetIdRef.current !== messageId) {
+        return;
+      }
+
+      const element = audioElementsRef.current[messageId];
+      if (!element) {
+        return;
+      }
+
+      element.currentTime = 0;
+      void element.play().catch(() => {
+        // Autoplay can be blocked; ignore and allow manual playback.
+      });
+      autoPlayedRef.current.add(messageId);
+      autoPlayTargetIdRef.current = null;
+    });
+  }, [audioByMessage]);
+
+  useEffect(() => {
+    return () => {
+      releaseAllAudioUrls();
+    };
+  }, [releaseAllAudioUrls]);
 
   const persistMessages = (nextMessages: ChatMessage[]) => {
     setMessages(nextMessages);
@@ -95,6 +291,8 @@ export default function Home() {
       setError("MESSAGE_TOO_LONG");
       return;
     }
+
+    autoPlayTargetIdRef.current = null;
 
     const userMessage = overrideMessage ?? createMessage("user", trimmed);
     const nextMessages = overrideMessage ? messages : [...messages, userMessage];
@@ -142,6 +340,8 @@ export default function Home() {
         payload.assistantMessage.content
       );
       const updated = [...nextMessages, assistantMessage];
+      autoPlayTargetIdRef.current = assistantMessage.id;
+      autoPlayedRef.current.delete(assistantMessage.id);
       persistMessages(updated);
       setRetryMessage(null);
     } catch (err) {
@@ -158,6 +358,7 @@ export default function Home() {
   };
 
   const handleReset = () => {
+    clearAudioState();
     const initial = resetMessages();
     setMessages(initial);
     saveMessages(initial);
@@ -224,26 +425,69 @@ export default function Home() {
                 Loading lesson...
               </div>
             ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex w-full ${
-                    message.role === "assistant"
-                      ? "justify-start"
-                      : "justify-end"
-                  }`}
-                >
+              messages.map((message) => {
+                const audioState = audioByMessage[message.id];
+                const isAssistant = message.role === "assistant";
+                let audioContent: JSX.Element | null = null;
+
+                if (isAssistant) {
+                  if (audioState?.status === "ready" && audioState.url) {
+                    audioContent = (
+                      <audio
+                        className="w-full"
+                        ref={(element) => handleAudioElementRef(message.id, element)}
+                        controls
+                        preload="none"
+                        src={audioState.url}
+                        aria-label="Assistant audio playback"
+                      />
+                    );
+                  } else if (audioState?.status === "error") {
+                    audioContent = (
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-destructive">Audio unavailable.</span>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => requestAudioForMessage(message)}
+                        >
+                          Retry
+                        </Button>
+                      </div>
+                    );
+                  } else {
+                    audioContent = (
+                      <span className="text-xs text-muted-foreground">
+                        Generating pronunciation...
+                      </span>
+                    );
+                  }
+                }
+
+                return (
                   <div
-                    className={`max-w-[70%] whitespace-pre-wrap rounded-xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-                      message.role === "assistant"
-                        ? "bg-muted text-foreground"
-                        : "bg-primary text-primary-foreground"
+                    key={message.id}
+                    className={`flex w-full ${
+                      isAssistant ? "justify-start" : "justify-end"
                     }`}
                   >
-                    {message.content}
+                    <div
+                      className={`max-w-[70%] whitespace-pre-wrap rounded-xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+                        isAssistant
+                          ? "bg-muted text-foreground"
+                          : "bg-primary text-primary-foreground"
+                      }`}
+                    >
+                      {message.content}
+                      {audioContent ? (
+                        <div className="mt-3 rounded-lg bg-background/40 p-2">
+                          {audioContent}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 

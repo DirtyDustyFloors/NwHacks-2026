@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.31.0",
+    "@radix-ui/react-separator": "^1.1.8",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.23",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18"
+  }
+}
