@@ -181,7 +181,7 @@ export default function Home() {
     if (viewport) {
       viewport.scrollTop = viewport.scrollHeight;
     }
-  }, [messages, inFlight]);
+  }, [messages, inFlight, audioByMessage]);
 
   useEffect(() => {
     const currentIds = new Set(messages.map((message) => message.id));
@@ -419,10 +419,15 @@ export default function Home() {
                 messages.map((message) => {
                   const audioState = audioByMessage[message.id];
                   const isAssistant = message.role === "assistant";
+
+                  if (isAssistant && audioState?.status !== "ready") {
+                    return null;
+                  }
+
                   let audioContent: React.ReactNode | null = null;
 
                   if (isAssistant) {
-                    if (audioState?.status === "ready" && audioState.url) {
+                    if (audioState?.url) {
                       const shouldAutoPlay =
                         autoPlayTargetIdRef.current === message.id &&
                         !autoPlayedRef.current.has(message.id);
@@ -439,18 +444,6 @@ export default function Home() {
                             }
                           }}
                         />
-                      );
-                    } else if (audioState?.status === "error") {
-                      audioContent = (
-                        <span className="text-xs text-destructive">
-                          Audio unavailable
-                        </span>
-                      );
-                    } else {
-                      audioContent = (
-                        <span className="text-xs text-muted-foreground">
-                          Generating pronunciation...
-                        </span>
                       );
                     }
                   }
