@@ -21,6 +21,7 @@
   --input: 220 16% 20%;
   --ring: 210 70% 50%;
   --radius: 0.75rem;
+  --font-rubik: "Rubik", sans-serif;
 }
 
 @theme inline {

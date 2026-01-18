@@ -10,15 +10,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, ProgressValue } from "@/lib/types";
 import {
   createInitialMessage,
   loadMessages,
+  loadProgress,
   resetMessages,
   saveMessages,
+  saveProgress,
 } from "@/lib/storage";
+import Image from "next/image";
 
 const ERROR_MESSAGES: Record<string, string> = {
   TIMEOUT: "The AI service is taking too long. Please retry.",
@@ -52,6 +56,7 @@ export default function Home() {
   const [inFlight, setInFlight] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryMessage, setRetryMessage] = useState<ChatMessage | null>(null);
+  const [progress, setProgress] = useState<ProgressValue>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [audioByMessage, setAudioByMessage] = useState<Record<string, AudioStatus>>({});
@@ -184,13 +189,16 @@ export default function Home() {
 
   useEffect(() => {
     const stored = loadMessages();
+    const storedProgress = loadProgress();
     if (stored.length === 0) {
       const initial = createInitialMessage();
       setMessages([initial]);
       saveMessages([initial]);
+      setProgress(storedProgress);
       return;
     }
     setMessages(stored);
+    setProgress(storedProgress);
   }, []);
 
   useEffect(() => {
@@ -305,6 +313,11 @@ export default function Home() {
     saveMessages(nextMessages);
   };
 
+  const persistProgress = (value: ProgressValue) => {
+    setProgress(value);
+    saveProgress(value);
+  };
+
   const sendMessage = async (overrideMessage?: ChatMessage) => {
     if (inFlight) {
       return;
@@ -359,6 +372,7 @@ export default function Home() {
 
       const payload = (await response.json()) as {
         assistantMessage?: { role: "assistant"; content: string };
+        progress?: number | null;
       };
       if (!payload.assistantMessage?.content) {
         throw new Error("AI_SERVICE_FAILED");
@@ -372,6 +386,9 @@ export default function Home() {
       autoPlayTargetIdRef.current = assistantMessage.id;
       autoPlayedRef.current.delete(assistantMessage.id);
       persistMessages(updated);
+      if (typeof payload.progress === "number" && !Number.isNaN(payload.progress)) {
+        persistProgress(payload.progress);
+      }
       setRetryMessage(null);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
@@ -391,6 +408,7 @@ export default function Home() {
     const initial = resetMessages();
     setMessages(initial);
     saveMessages(initial);
+    persistProgress(null);
     setInput("");
     setError(null);
     setRetryMessage(null);
@@ -411,18 +429,17 @@ export default function Home() {
       <Card className="ml-auto margin-right-auto flex w-full max-w-5xl flex-1 flex-col border-border/80 bg-card/80 shadow-2xl">
         <CardHeader className="space-y-4 pb-4">
           <div className="flex items-start justify-between gap-6">
-            <div className="space-y-2">
-              <Badge className="w-fit" variant="secondary">
-                Mandarin Lesson Demo
-              </Badge>
-              <CardTitle className="text-2xl font-semibold text-foreground">
-                Guided chat lesson
-              </CardTitle>
-              <CardDescription className="max-w-2xl text-base text-muted-foreground">
-                Practice a single lesson objective with a structured teach -
-                practice - correct - quiz loop. The assistant responds only after
-                you send a message.
-              </CardDescription>
+            <div className="space-y-2 flex items-center">
+              <Image src="/logo.png" alt="Language App Logo" width={128} height={128} />
+              <div className="flex-col pl-4">
+                <CardTitle className="text-5xl font-bold">TomoSpeak</CardTitle>
+                <CardDescription className="text-m text-muted-foreground">
+                  とも (Tomo) = friend 
+                </CardDescription>
+                <CardDescription className="text-lg text-">
+                  TomoSpeak: Your friendly AI Learning Companion
+                </CardDescription>
+              </div>
             </div>
             <Button
               variant="outline"
@@ -435,7 +452,7 @@ export default function Home() {
           </div>
           <Separator />
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-            <span>Desktop-only demo - Local session storage</span>
+            <span>Powered by Gemini 2.5 Flash-Lite & ElevenLab </span>
             {inFlight ? (
               <span className="text-primary">AI is typing...</span>
             ) : lastAssistant ? (
@@ -562,6 +579,14 @@ export default function Home() {
               <span>Enter to send. Shift+Enter for new line.</span>
               <span>{input.length}/2000</span>
             </div>
+          </div>
+
+          <div className="rounded-xl border border-border/70 bg-background/50 p-4">
+            <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+              <span>Lesson progress</span>
+              <span>{progress ?? 0}%</span>
+            </div>
+            <Progress value={progress ?? 0} className="mt-3" />
           </div>
         </CardContent>
       </Card>

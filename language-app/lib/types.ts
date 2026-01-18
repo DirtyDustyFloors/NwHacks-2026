@@ -6,3 +6,5 @@ export type ChatMessage = {
   content: string;
   timestamp: string;
 };
+
+export type ProgressValue = number | null;

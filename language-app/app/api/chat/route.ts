@@ -11,6 +11,11 @@ type ClientMessage = {
   content: string;
 };
 
+type ParsedAssistantResponse = {
+  content: string;
+  progress: number | null;
+};
+
 const buildPrompt = (messages: ClientMessage[]) => {
   const lines = messages.map((message) => {
     const label = message.role === "user" ? "User" : "Assistant";
@@ -36,6 +41,33 @@ const validateMessages = (messages: ClientMessage[]) => {
     }
   }
   return null;
+};
+
+const parseAssistantResponse = (text: string): ParsedAssistantResponse => {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return { content: "", progress: null };
+  }
+
+  const lines = trimmed.split(/\r?\n/);
+  if (lines.length === 0) {
+    return { content: trimmed, progress: null };
+  }
+
+  const firstLine = lines[0].trim();
+  const match = /^PROGRESS=(\d{1,3})$/i.exec(firstLine);
+  if (!match) {
+    return { content: trimmed, progress: null };
+  }
+
+  const value = Number(match[1]);
+  if (Number.isNaN(value)) {
+    return { content: lines.slice(1).join("\n").trim(), progress: null };
+  }
+
+  const normalized = Math.min(100, Math.max(0, value));
+  const content = lines.slice(1).join("\n").trim();
+  return { content, progress: normalized };
 };
 
 export async function POST(request: Request) {
@@ -84,11 +116,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "EMPTY_RESPONSE" }, { status: 502 });
     }
 
+    const parsed = parseAssistantResponse(text);
+    if (!parsed.content) {
+      return NextResponse.json({ error: "EMPTY_RESPONSE" }, { status: 502 });
+    }
+
     return NextResponse.json({
       assistantMessage: {
         role: "assistant",
-        content: text.trim(),
+        content: parsed.content,
       },
+      progress: parsed.progress,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "TIMEOUT") {
