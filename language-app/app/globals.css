@@ -22,18 +22,6 @@
   --ring: 210 70% 50%;
   --radius: 0.75rem;
   --font-rubik: "Rubik", sans-serif;
-
-  --plyr-color-main: hsl(var(--primary));
-  --plyr-audio-controls-background: hsl(var(--muted));
-  --plyr-audio-control-color: hsl(var(--foreground));
-  --plyr-audio-control-color-hover: hsl(var(--primary));
-  --plyr-audio-control-background-hover: hsl(var(--accent));
-  --plyr-menu-background: hsl(var(--card));
-  --plyr-menu-color: hsl(var(--foreground));
-  --plyr-audio-progress-buffered-background: hsla(var(--primary), 0.3);
-  --plyr-range-fill-background: hsl(var(--primary));
-  --plyr-range-track-background: hsla(var(--foreground), 0.2);
-  --plyr-font-family: var(--font-inter);
 }
 
 @theme inline {

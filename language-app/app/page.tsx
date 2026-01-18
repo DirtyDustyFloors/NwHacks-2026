@@ -11,8 +11,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { AudioPlayButton } from "@/components/audio-play-button";
 import type { ChatMessage, ProgressValue } from "@/lib/types";
 import {
   createInitialMessage,
@@ -61,7 +63,6 @@ export default function Home() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [audioByMessage, setAudioByMessage] = useState<Record<string, AudioStatus>>({});
   const audioUrlsRef = useRef<Record<string, string>>({});
-  const audioElementsRef = useRef<Record<string, HTMLAudioElement | null>>({});
   const messageIdsRef = useRef<Set<string>>(new Set());
   const autoPlayTargetIdRef = useRef<string | null>(null);
   const autoPlayedRef = useRef<Set<string>>(new Set());
@@ -88,19 +89,12 @@ export default function Home() {
     });
   }, [releaseAudioUrl]);
 
-  const releaseAudioElement = useCallback((messageId: string) => {
-    if (audioElementsRef.current[messageId]) {
-      delete audioElementsRef.current[messageId];
-    }
-  }, []);
-
   const clearAudioState = useCallback(() => {
     setAudioByMessage((prev) => {
       if (Object.keys(prev).length === 0) {
         return prev;
       }
       releaseAllAudioUrls();
-      audioElementsRef.current = {};
       return {};
     });
     autoPlayedRef.current.clear();
@@ -163,30 +157,6 @@ export default function Home() {
     [fetchAudioForMessage, releaseAudioUrl]
   );
 
-  const handleAudioElementRef = useCallback(
-    (messageId: string, element: HTMLAudioElement | null) => {
-      if (element) {
-        audioElementsRef.current[messageId] = element;
-        const state = audioByMessage[messageId];
-        if (
-          state?.status === "ready" &&
-          autoPlayTargetIdRef.current === messageId &&
-          !autoPlayedRef.current.has(messageId)
-        ) {
-          element.currentTime = 0;
-          void element.play().catch(() => {
-            // Browser autoplay policies might block playback; safe to ignore.
-          });
-          autoPlayedRef.current.add(messageId);
-          autoPlayTargetIdRef.current = null;
-        }
-      } else {
-        delete audioElementsRef.current[messageId];
-      }
-    },
-    [audioByMessage]
-  );
-
   useEffect(() => {
     const stored = loadMessages();
     const storedProgress = loadProgress();
@@ -205,7 +175,10 @@ export default function Home() {
     if (!listRef.current) {
       return;
     }
-    listRef.current.scrollTop = listRef.current.scrollHeight;
+    const viewport = listRef.current.closest('[data-radix-scroll-area-viewport]') as HTMLElement;
+    if (viewport) {
+      viewport.scrollTop = viewport.scrollHeight;
+    }
   }, [messages, inFlight]);
 
   useEffect(() => {
@@ -225,18 +198,12 @@ export default function Home() {
       return changed ? nextState : prev;
     });
 
-    Object.keys(audioElementsRef.current).forEach((id) => {
-      if (!currentIds.has(id)) {
-        releaseAudioElement(id);
-      }
-    });
-
     autoPlayedRef.current.forEach((playedId) => {
       if (!currentIds.has(playedId)) {
         autoPlayedRef.current.delete(playedId);
       }
     });
-  }, [messages, releaseAudioUrl, releaseAudioElement]);
+  }, [messages, releaseAudioUrl]);
 
   useEffect(() => {
     const assistantMessages = messages.filter(
@@ -247,32 +214,6 @@ export default function Home() {
       requestAudioForMessage(message);
     });
   }, [messages, audioByMessage, requestAudioForMessage]);
-
-  useEffect(() => {
-    Object.entries(audioByMessage).forEach(([messageId, state]) => {
-      if (state.status !== "ready" || !state.url) {
-        return;
-      }
-      if (autoPlayedRef.current.has(messageId)) {
-        return;
-      }
-      if (autoPlayTargetIdRef.current !== messageId) {
-        return;
-      }
-
-      const element = audioElementsRef.current[messageId];
-      if (!element) {
-        return;
-      }
-
-      element.currentTime = 0;
-      void element.play().catch(() => {
-        // Autoplay can be blocked; ignore and allow manual playback.
-      });
-      autoPlayedRef.current.add(messageId);
-      autoPlayTargetIdRef.current = null;
-    });
-  }, [audioByMessage]);
 
   useEffect(() => {
     const initWebcam = async () => {
@@ -463,80 +404,82 @@ export default function Home() {
           </div>
         </CardHeader>
         <CardContent className="flex flex-1 flex-col gap-4" aria-live="polite">
-          <div
-            ref={listRef}
-            className="flex h-[58vh] flex-col min-h-0 gap-4 overflow-y-auto rounded-xl border border-border/70 bg-background/40 p-5 scroll-smooth"
-          >
-            {messages.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Loading lesson...
-              </div>
-            ) : (
-              messages.map((message) => {
-                const audioState = audioByMessage[message.id];
-                const isAssistant = message.role === "assistant";
-                let audioContent: React.ReactNode | null = null;
+          <ScrollArea className="h-[58vh] w-full rounded-xl border border-border/70 bg-background/40">
+            <div
+              ref={listRef}
+              className="flex flex-col min-h-0 gap-4 p-5"
+            >
+              {messages.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Loading lesson...
+                </div>
+              ) : (
+                messages.map((message) => {
+                  const audioState = audioByMessage[message.id];
+                  const isAssistant = message.role === "assistant";
+                  let audioContent: React.ReactNode | null = null;
 
-                if (isAssistant) {
-                  if (audioState?.status === "ready" && audioState.url) {
-                    audioContent = (
-                      <audio
-                        className="w-full"
-                        ref={(element) => handleAudioElementRef(message.id, element)}
-                        controls
-                        preload="none"
-                        src={audioState.url}
-                        aria-label="Assistant audio playback"
-                      />
-                    );
-                  } else if (audioState?.status === "error") {
-                    audioContent = (
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="text-destructive">Audio unavailable.</span>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => requestAudioForMessage(message)}
-                        >
-                          Retry
-                        </Button>
-                      </div>
-                    );
-                  } else {
-                    audioContent = (
-                      <span className="text-xs text-muted-foreground">
-                        Generating pronunciation...
-                      </span>
-                    );
+                  if (isAssistant) {
+                    if (audioState?.status === "ready" && audioState.url) {
+                      const shouldAutoPlay =
+                        autoPlayTargetIdRef.current === message.id &&
+                        !autoPlayedRef.current.has(message.id);
+
+                      audioContent = (
+                        <AudioPlayButton
+                          key={message.id}
+                          src={audioState.url}
+                          autoPlay={shouldAutoPlay}
+                          onEnded={() => {
+                            if (autoPlayTargetIdRef.current === message.id) {
+                              autoPlayedRef.current.add(message.id);
+                              autoPlayTargetIdRef.current = null;
+                            }
+                          }}
+                        />
+                      );
+                    } else if (audioState?.status === "error") {
+                      audioContent = (
+                        <span className="text-xs text-destructive">
+                          Audio unavailable
+                        </span>
+                      );
+                    } else {
+                      audioContent = (
+                        <span className="text-xs text-muted-foreground">
+                          Generating pronunciation...
+                        </span>
+                      );
+                    }
                   }
-                }
 
-                return (
-                  <div
-                    key={message.id}
-                    className={`flex w-full ${
-                      isAssistant ? "justify-start" : "justify-end"
-                    }`}
-                  >
+                  return (
                     <div
-                      className={`max-w-[70%] whitespace-pre-wrap rounded-xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-                        isAssistant
-                          ? "bg-muted text-foreground"
-                          : "bg-primary text-primary-foreground"
+                      key={message.id}
+                      className={`flex w-full ${
+                        isAssistant ? "justify-start" : "justify-end"
                       }`}
                     >
-                      {message.content}
-                      {audioContent ? (
-                        <div className="mt-3 rounded-lg bg-background/40 p-2">
-                          {audioContent}
-                        </div>
-                      ) : null}
+                      <div
+                        className={`max-w-[70%] whitespace-pre-wrap rounded-xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+                          isAssistant
+                            ? "bg-muted text-foreground"
+                            : "bg-primary text-primary-foreground"
+                        }`}
+                      >
+                        {message.content}
+                        {audioContent ? (
+                          <div className="mt-3 rounded-lg ">
+                            {audioContent}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
 
           {errorMessage ? (
             <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive-foreground">
