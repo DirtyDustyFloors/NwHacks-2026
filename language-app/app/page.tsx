@@ -475,7 +475,7 @@ export default function Home() {
               messages.map((message) => {
                 const audioState = audioByMessage[message.id];
                 const isAssistant = message.role === "assistant";
-                let audioContent: JSX.Element | null = null;
+                let audioContent: React.ReactNode | null = null;
 
                 if (isAssistant) {
                   if (audioState?.status === "ready" && audioState.url) {
