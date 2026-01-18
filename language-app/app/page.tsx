@@ -53,6 +53,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [retryMessage, setRetryMessage] = useState<ChatMessage | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [audioByMessage, setAudioByMessage] = useState<Record<string, AudioStatus>>({});
   const audioUrlsRef = useRef<Record<string, string>>({});
   const audioElementsRef = useRef<Record<string, HTMLAudioElement | null>>({});
@@ -266,6 +267,34 @@ export default function Home() {
   }, [audioByMessage]);
 
   useEffect(() => {
+    const initWebcam = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: {
+            width: { ideal: 2560 },
+            height: { ideal: 1440},
+            frameRate: { ideal: 60}
+          } });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (error) {
+        console.error("Error accessing webcam:", error);
+      }
+    };
+
+    void initWebcam();
+
+    return () => {
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
+
+  useEffect(() => {
     return () => {
       releaseAllAudioUrls();
     };
@@ -378,6 +407,7 @@ export default function Home() {
 
   return (
     <div className="flex h-screen w-full flex-col bg-transparent px-10 py-10">
+      <video ref={videoRef} autoPlay playsInline muted className="fixed inset-0 -z-10 w-full h-full object-cover"/>
       <Card className="ml-auto margin-right-auto flex w-full max-w-5xl flex-1 flex-col border-border/80 bg-card/80 shadow-2xl">
         <CardHeader className="space-y-4 pb-4">
           <div className="flex items-start justify-between gap-6">
