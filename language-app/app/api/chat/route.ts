@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GENERATION_CONFIG, SYSTEM_PROMPT } from "@/lib/prompts";
 
-const MODEL_NAME = "gemini-2.5-flash";
+const MODEL_NAME = "gemini-2.5-flash-lite";
 const TIMEOUT_MS = 20000;
 const MAX_MESSAGE_LENGTH = 2000;
 
