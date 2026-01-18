@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const ELEVENLABS_VOICE_ID =
-  process.env.ELEVENLABS_VOICE_ID ?? "laksdlaskjdlasj";
+  process.env.ELEVENLABS_VOICE_ID ?? "6FGZjfQDtuhZjLHFuM90";
 const MAX_TTS_CHARACTERS = 2000;
 
 interface TtsRequestPayload {
@@ -10,7 +10,7 @@ interface TtsRequestPayload {
 
 const buildRequestBody = (text: string) => ({
   text,
-  model_id: "eleven_multilingual_v2",
+  model_id: "eleven_turbo_v2_5",
   voice_settings: {
     stability: 0.4,
     similarity_boost: 0.75,

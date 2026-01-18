@@ -539,7 +539,7 @@ export default function Home() {
               <Textarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
-                placeholder="Reply in Mandarin or ask for help..."
+                placeholder="Reply or ask for help..."
                 className="min-h-[70px] resize-none bg-background/20"
                 disabled={inFlight}
                 maxLength={2000}
