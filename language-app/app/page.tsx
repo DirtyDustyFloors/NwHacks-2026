@@ -351,6 +351,11 @@ export default function Home() {
     const initial = resetMessages();
     setMessages(initial);
     saveMessages(initial);
+    const firstMessage = initial[0];
+    if (firstMessage && firstMessage.role === "assistant") {
+      autoPlayTargetIdRef.current = firstMessage.id;
+      autoPlayedRef.current.delete(firstMessage.id);
+    }
     persistProgress(null);
     setInput("");
     setError(null);

@@ -7,7 +7,7 @@ If no level is given, default to A1.
 After the language is chosen, start teaching immediately in the same response.
 
 Teaching Flow (implicit, never stated aloud):
-- Teach 3 new items/phrases for one lesson
+- Teach 5 new items/phrases for one lesson
 - Introduce, practice, check understanding
 - Continue only after mastery
 
